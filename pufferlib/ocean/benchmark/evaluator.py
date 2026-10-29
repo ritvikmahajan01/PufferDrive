@@ -36,7 +36,9 @@ class WOSACEvaluator:
         self.config = config
         self.num_steps = 91  # Hardcoded for WOSAC (9.1s at 10Hz)
         self.init_steps = config.get("eval", {}).get("wosac_init_steps", 0)
-        self.sim_steps = self.num_steps - self.init_steps
+        # The env resets inside the step that reaches the last log timestep, so that final state is never
+        # observable: a rollout yields one frame fewer than the log, and the log is truncated to match.
+        self.sim_steps = self.num_steps - self.init_steps - 1
         self.num_rollouts = config.get("eval", {}).get("wosac_num_rollouts", 32)
         self.device = config.get("train", {}).get("device", "cuda")
         self.eval_mode = config.get("eval", {}).get("wosac_eval_mode", "policy")
@@ -161,9 +163,12 @@ class WOSACEvaluator:
         """Collect ground truth data for evaluation.
         Returns:
             trajectories: dict with keys 'x', 'y', 'z', 'heading', 'id'
-                        each of shape (num_agents, 1, num_steps) for trajectory data
+                        each of shape (num_agents, 1, sim_steps) for trajectory data
         """
-        return puffer_env.get_ground_truth_trajectories()
+        trajectories = puffer_env.get_ground_truth_trajectories()
+        for key in ["x", "y", "z", "heading", "valid"]:
+            trajectories[key] = trajectories[key][..., : self.sim_steps]
+        return trajectories
 
     def collect_simulated_trajectories(self, args, puffer_env, policy):
         """Roll out policy in env and collect trajectories.
@@ -271,6 +276,7 @@ class WOSACEvaluator:
         agent_state: Dict,
         road_edge_polylines: Dict,
         aggregate_results: bool = False,
+        drop_last_scenario: bool = True,
     ) -> Dict:
         """Compute realism metrics comparing simulated and ground truth trajectories.
 
@@ -279,6 +285,8 @@ class WOSACEvaluator:
             simulated_trajectories: Dict with keys ['x', 'y', 'z', 'heading', 'id']
             agent_state: Dict with length and width of agents.
             road_edge_polylines: Dict with keys ['x', 'y', 'lengths', 'scenario_id']
+            drop_last_scenario: Drop the last scenario, whose agents may be cut off by the num_agents cap.
+                Not needed when the env was built from fixed map_ids, which loads every scenario in full.
 
         Note: z-position currently not used.
 
@@ -629,7 +637,7 @@ class WOSACEvaluator:
         df_scene_level["map_based_metrics"] = map_metrics
 
         # Safety: drop the last scenario (potentially incomplete) from the scene-level results
-        if last_scenario_id in df_scene_level.index:
+        if drop_last_scenario and last_scenario_id in df_scene_level.index:
             df_scene_level = df_scene_level.drop(last_scenario_id)
 
         if aggregate_results:

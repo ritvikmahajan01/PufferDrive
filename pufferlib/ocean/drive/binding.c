@@ -78,24 +78,48 @@ static PyObject *my_shared(PyObject *self, PyObject *args, PyObject *kwargs) {
     float goal_target_distance = unpack(kwargs, "goal_target_distance");
     int max_controlled_agents = unpack(kwargs, "max_controlled_agents");
 
+    // Optional fixed list of map ids. When given, exactly these maps are loaded in order (skipping maps
+    // without controllable agents) and num_agents does not cap the total, e.g. for reproducible evaluation.
+    PyObject *fixed_map_ids = PyDict_GetItemString(kwargs, "map_ids");
+    if (fixed_map_ids == Py_None) {
+        fixed_map_ids = NULL;
+    }
+    if (fixed_map_ids != NULL && !PyList_Check(fixed_map_ids)) {
+        PyErr_SetString(PyExc_TypeError, "map_ids must be a list of ints or None");
+        return NULL;
+    }
+    int num_fixed_maps = fixed_map_ids ? (int)PyList_Size(fixed_map_ids) : 0;
+
     clock_gettime(CLOCK_REALTIME, &ts);
-    srand(ts.tv_nsec); // Always use random sampling with replacement
+    srand(ts.tv_nsec); // Random sampling with replacement unless map_ids is given
 
     int total_agent_count = 0;
     int env_count = 0;
 
-    int max_envs = num_agents;
+    int max_envs = fixed_map_ids ? num_fixed_maps : num_agents;
 
     int maps_checked = 0;
     PyObject *agent_offsets = PyList_New(max_envs + 1);
     PyObject *map_ids = PyList_New(max_envs);
 
     // Getting env count
-    while (total_agent_count < num_agents && env_count < max_envs) {
+    while ((fixed_map_ids || total_agent_count < num_agents) && env_count < max_envs) {
         char map_file[512];
 
-        // Always sample randomly with replacement
-        int map_id = rand() % num_maps;
+        int map_id;
+        if (fixed_map_ids) {
+            if (maps_checked + env_count >= num_fixed_maps) {
+                break;
+            }
+            map_id = (int)PyLong_AsLong(PyList_GetItem(fixed_map_ids, maps_checked + env_count));
+            if (PyErr_Occurred()) {
+                Py_DECREF(agent_offsets);
+                Py_DECREF(map_ids);
+                return NULL;
+            }
+        } else {
+            map_id = rand() % num_maps;
+        }
 
         // printf("Sampling map_id: %d\n", map_id);
 
@@ -116,7 +140,7 @@ static PyObject *my_shared(PyObject *self, PyObject *args, PyObject *kwargs) {
             maps_checked++;
 
             // Safeguard: if we've checked all available maps and found no active agents, raise an error
-            if (maps_checked >= num_maps) {
+            if (!fixed_map_ids && maps_checked >= num_maps) {
                 for (int j = 0; j < env->num_entities; j++) {
                     free_entity(&env->entities[j]);
                 }
@@ -165,7 +189,14 @@ static PyObject *my_shared(PyObject *self, PyObject *args, PyObject *kwargs) {
         free(env);
     }
 
-    if (total_agent_count >= num_agents) {
+    if (fixed_map_ids && env_count == 0) {
+        Py_DECREF(agent_offsets);
+        Py_DECREF(map_ids);
+        PyErr_SetString(PyExc_ValueError, "No controllable agents found in any of the given map_ids");
+        return NULL;
+    }
+
+    if (!fixed_map_ids && total_agent_count >= num_agents) {
         total_agent_count = num_agents;
     }
 

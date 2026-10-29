@@ -49,6 +49,7 @@ class Drive(pufferlib.PufferEnv):
         control_mode="control_vehicles",
         max_controlled_agents=32,
         map_dir="resources/drive/binaries/training",
+        map_ids=None,
     ):
         # env
         self.dt = dt
@@ -95,6 +96,8 @@ class Drive(pufferlib.PufferEnv):
         self.init_mode_str = init_mode
         self.control_mode_str = control_mode
         self.map_dir = map_dir
+        # Fixed, ordered list of map indices to load instead of sampling num_maps at random (e.g. for evaluation)
+        self.fixed_map_ids = [int(m) for m in map_ids] if map_ids is not None else None
 
         if self.control_mode_str == "control_vehicles":
             self.control_mode = 0
@@ -150,6 +153,10 @@ class Drive(pufferlib.PufferEnv):
             raise ValueError(
                 f"num_maps ({num_maps}) exceeds available maps in directory ({available_maps}). Please reduce num_maps or add more maps to resources/drive/binaries."
             )
+        if self.fixed_map_ids is not None:
+            missing = [m for m in self.fixed_map_ids if not os.path.exists(f"{map_dir}/map_{m:03d}.bin")]
+            if missing:
+                raise FileNotFoundError(f"map_ids not found in {map_dir}: {missing}")
 
         # Iterate through all maps to count total agents that can be initialized for each map
         agent_offsets, map_ids, num_envs = binding.shared(
@@ -162,6 +169,7 @@ class Drive(pufferlib.PufferEnv):
             goal_behavior=self.goal_behavior,
             goal_target_distance=self.goal_target_distance,
             max_controlled_agents=self.max_controlled_agents,
+            map_ids=self.fixed_map_ids,
         )
 
         self.num_agents = agent_offsets[-1]
@@ -230,6 +238,7 @@ class Drive(pufferlib.PufferEnv):
             goal_speed=self.goal_speed,
             map_dir=self.map_dir,
             max_controlled_agents=self.max_controlled_agents,
+            map_ids=self.fixed_map_ids,
         )
         self.agent_offsets = agent_offsets
         self.map_ids = map_ids

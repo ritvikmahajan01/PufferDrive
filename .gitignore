@@ -148,6 +148,7 @@ dmypy.json
 
 checkpoints/
 experiments/
+eval_reports/
 wandb/
 .neptune/
 raylib*/

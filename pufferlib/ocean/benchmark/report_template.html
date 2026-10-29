@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PufferDrive Eval</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f4f2;
+  --surface-1: #fcfcfb;
+  --surface-2: #efeeeb;
+  --border: #dddcd7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #7a7974;
+  --accent: #2a78d6;
+  --good: #1f7a3a;
+  --bad: #c03a2b;
+  --video-bg: #1d1d1b;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #6250d6; --series-8: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-0: #121211;
+    --surface-1: #1a1a19;
+    --surface-2: #242422;
+    --border: #353532;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --accent: #3987e5;
+    --good: #4cb86a;
+    --bad: #e66767;
+    --video-bg: #0b0b0a;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #121211;
+  --surface-1: #1a1a19;
+  --surface-2: #242422;
+  --border: #353532;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8f8e86;
+  --accent: #3987e5;
+  --good: #4cb86a;
+  --bad: #e66767;
+  --video-bg: #0b0b0a;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 1440px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 24px; margin-bottom: 20px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+.protocol { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: var(--surface-2); color: var(--text-secondary); border-radius: 999px;
+  padding: 2px 10px; font-size: 12px; white-space: nowrap;
+}
+.spacer { flex: 1; }
+select, button {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+}
+button { cursor: pointer; }
+button:hover, select:hover { border-color: var(--text-muted); }
+button:focus-visible, select:focus-visible, input:focus-visible, tr:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.card {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; margin-bottom: 20px;
+}
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; }
+.card-head h2 { margin: 0; }
+.muted { color: var(--text-muted); }
+.small { font-size: 12px; }
+.scroll { overflow-x: auto; }
+
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+th { font-weight: 600; font-size: 12px; color: var(--text-secondary); position: sticky; top: 0; background: var(--surface-1); }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text-primary); }
+th .dir { color: var(--text-muted); font-weight: 400; }
+td.left, th.left { text-align: left; }
+tbody tr:last-child td { border-bottom: none; }
+td.best { font-weight: 700; }
+td.best::after { content: " ★"; font-size: 10px; color: var(--text-muted); }
+tr.ref td { color: var(--text-muted); font-style: italic; }
+
+.run-cell { display: flex; align-items: center; gap: 8px; text-align: left; white-space: normal; min-width: 180px; }
+.run-cell .name { font-weight: 600; }
+.run-cell .notes { color: var(--text-muted); font-size: 12px; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.dirty { color: var(--text-muted); font-size: 11px; }
+
+.scenes-layout { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(0, 1.7fr); gap: 20px; align-items: start; }
+.scenes-layout > * { min-width: 0; }
+@media (max-width: 1000px) { .scenes-layout { grid-template-columns: minmax(0, 1fr); } }
+.scene-list { max-height: 640px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.scene-list tbody tr { cursor: pointer; }
+.scene-list tbody tr:hover { background: var(--surface-2); }
+.scene-list tbody tr.selected { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.scene-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.has-video { color: var(--text-muted); font-size: 11px; margin-left: 4px; }
+.delta-good { color: var(--good); }
+.delta-bad { color: var(--bad); }
+
+.detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.detail-head .scene-id { font-size: 14px; }
+.videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.video-tile { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--video-bg); }
+.video-tile .label {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600;
+  background: var(--surface-1); border-bottom: 1px solid var(--border);
+}
+.video-tile video { display: block; width: 100%; height: 360px; object-fit: contain; background: var(--video-bg); }
+.video-tile .missing { height: 360px; display: grid; place-items: center; color: #8f8e86; font-size: 12px; padding: 16px; text-align: center; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
+.controls input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+.controls .time { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 12px; min-width: 70px; }
+.legend-note { font-size: 12px; color: var(--text-muted); margin: -4px 0 12px; }
+
+details summary { cursor: pointer; color: var(--text-secondary); font-weight: 600; margin-bottom: 8px; }
+dl.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 8px 0 0; font-size: 13px; }
+dl.glossary dt { font-weight: 600; }
+dl.glossary dd { margin: 0; color: var(--text-secondary); }
+.empty { padding: 48px 16px; text-align: center; color: var(--text-muted); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>PufferDrive eval</h1>
+    <div class="protocol" id="protocol"></div>
+    <div class="spacer"></div>
+    <label class="small muted" id="suite-picker-wrap" hidden>Suite <select id="suite-picker"></select></label>
+  </header>
+
+  <div id="app"></div>
+</main>
+
+<script id="report-data" type="application/json">/*__REPORT_DATA__*/ null</script>
+<script>
+"use strict";
+
+const DATA = JSON.parse(document.getElementById("report-data").textContent) || { suites: {}, runs: [] };
+
+const pct = (v) => (v * 100).toFixed(1) + "%";
+const fix = (n) => (v) => v.toFixed(n);
+
+// Headline metrics (runs table, scene list and scene detail)
+const METRICS = [
+  { key: "realism_meta_score", label: "Realism", better: "high", fmt: fix(4),
+    desc: "WOSAC realism meta-score: weighted sum of the nine component likelihoods below." },
+  { key: "kinematic_metrics", label: "Kinematic", better: "high", fmt: fix(4),
+    desc: "Mean likelihood of linear/angular speed and acceleration under the simulated distribution." },
+  { key: "interactive_metrics", label: "Interactive", better: "high", fmt: fix(4),
+    desc: "Mean likelihood of collision, distance to nearest object and time-to-collision." },
+  { key: "map_based_metrics", label: "Map", better: "high", fmt: fix(4),
+    desc: "Mean likelihood of distance to road edge and offroad indication." },
+  { key: "ade", label: "ADE (m)", better: "low", fmt: fix(2),
+    desc: "Average displacement from the logged trajectory, averaged over rollouts." },
+  { key: "min_ade", label: "minADE (m)", better: "low", fmt: fix(2),
+    desc: "Displacement of the closest of the rollouts to the logged trajectory." },
+  { key: "num_collisions_sim", label: "Collision", better: "low", fmt: pct, ref: "num_collisions_ref",
+    desc: "Share of evaluated agents (tracks to predict) that collide at least once, averaged over rollouts." },
+  { key: "num_offroad_sim", label: "Offroad", better: "low", fmt: pct, ref: "num_offroad_ref",
+    desc: "Share of evaluated agents that go offroad at least once, averaged over rollouts." },
+  { key: "env_score", label: "Goal w/o collision", better: "high", fmt: pct,
+    desc: "Share of all controlled agents that reach their goal (the logged end position) without colliding, from the env's episode logs." },
+];
+
+const COMPONENTS = [
+  ["likelihood_linear_speed", "Linear speed"],
+  ["likelihood_linear_acceleration", "Linear accel."],
+  ["likelihood_angular_speed", "Angular speed"],
+  ["likelihood_angular_acceleration", "Angular accel."],
+  ["likelihood_distance_to_nearest_object", "Dist. to object"],
+  ["likelihood_time_to_collision", "Time to collision"],
+  ["likelihood_collision_indication", "Collision"],
+  ["likelihood_distance_to_road_edge", "Dist. to road edge"],
+  ["likelihood_offroad_indication", "Offroad"],
+].map(([key, label]) => ({ key, label, better: "high", fmt: fix(4) }));
+
+const DETAIL_EXTRA = [
+  { key: "env_collision_rate", label: "Env collision", better: "low", fmt: pct,
+    desc: "Collision rate of all controlled agents as measured by the env itself (differs from the WOSAC box-overlap check)." },
+  { key: "env_offroad_rate", label: "Env offroad", better: "low", fmt: pct,
+    desc: "Offroad rate of all controlled agents as measured by the env itself." },
+  { key: "num_agents_per_scene", label: "Evaluated agents", fmt: fix(0) },
+];
+
+// Speeds relative to real time; the videos are encoded at 30 fps from a 10 Hz simulation
+const SPEEDS = [["0.5× real time", 1 / 6], ["Real time", 1 / 3], ["2× real time", 2 / 3], ["3× real time", 1]];
+
+// Persisted per-viewer UI state
+const STORE_KEY = "pufferdrive-eval-ui";
+let ui = { suite: null, hidden: [], sceneMetric: "realism_meta_score", sort: null, scene: null, speed: 1 / 3, videoOnly: false };
+try { Object.assign(ui, JSON.parse(localStorage.getItem(STORE_KEY)) || {}); } catch (e) {}
+const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(ui)); } catch (e) {} };
+
+// ---------- helpers ----------
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") node.className = v;
+    else if (k === "style") node.style.cssText = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined || c === false) continue;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return node;
+}
+const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+const show = (m, v) => (isNum(v) ? m.fmt(v) : "—");
+const runKey = (r) => r.dir;
+// Color follows the run (its order of creation across all runs), never its rank or filter state
+const runColor = (r) => `var(--series-${(DATA.runs.indexOf(r) % 8) + 1})`;
+const swatch = (r) => el("span", { class: "swatch", style: `background:${runColor(r)}`, "aria-hidden": "true" });
+
+function bestValues(runs, metrics, get) {
+  const best = {};
+  if (runs.length < 2) return best;
+  for (const m of metrics) {
+    if (!m.better) continue;
+    const vals = runs.map(get(m)).filter(isNum);
+    if (vals.length < 2) continue;
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    if (hi - lo < 1e-12) continue; // All tied: nothing to point out
+    best[m.key] = m.better === "high" ? hi : lo;
+  }
+  return best;
+}
+const isBest = (best, m, v) => isNum(v) && best[m.key] !== undefined && Math.abs(v - best[m.key]) < 1e-12;
+
+// ---------- page ----------
+function render() {
+  // Rebuilding the DOM would otherwise reset the page and scene-list scroll positions
+  const pageY = window.scrollY;
+  const oldList = document.querySelector(".scene-list");
+  const listY = oldList ? oldList.scrollTop : 0;
+  renderApp();
+  const newList = document.querySelector(".scene-list");
+  if (newList) newList.scrollTop = listY;
+  window.scrollTo(0, pageY);
+}
+
+function renderApp() {
+  const app = document.getElementById("app");
+  app.replaceChildren();
+
+  const suiteNames = Object.keys(DATA.suites);
+  if (!suiteNames.length) {
+    app.append(el("div", { class: "card empty" }, "No eval suites yet. Run ",
+      el("code", {}, "python -m pufferlib.ocean.benchmark.eval_report --run-name <name> --load-model-path <checkpoint.pt>")));
+    return;
+  }
+  if (!suiteNames.includes(ui.suite)) ui.suite = suiteNames[0];
+  const picker = document.getElementById("suite-picker");
+  document.getElementById("suite-picker-wrap").hidden = suiteNames.length < 2;
+  picker.replaceChildren(...suiteNames.map((n) => el("option", { value: n, selected: n === ui.suite }, n)));
+  picker.onchange = () => { ui.suite = picker.value; ui.scene = null; save(); render(); };
+
+  const suite = DATA.suites[ui.suite];
+  const p = suite.protocol;
+  document.getElementById("protocol").replaceChildren(
+    el("span", { class: "chip" }, `suite: ${suite.name}`),
+    el("span", { class: "chip" }, `${suite.scenes.length} scenes`),
+    el("span", { class: "chip" }, `${p.num_rollouts} rollouts / scene`),
+    el("span", { class: "chip" }, `start at step ${p.init_steps}`),
+    el("span", { class: "chip" }, p.control_mode),
+    el("span", { class: "chip", title: suite.map_dir }, suite.map_dir.split("/").slice(-1)[0]),
+  );
+
+  const runs = DATA.runs.filter((r) => r.suite === suite.name);
+  if (!runs.length) {
+    app.append(el("div", { class: "card empty" }, `No runs evaluated on suite '${suite.name}' yet.`));
+    return;
+  }
+  const selected = runs.filter((r) => !ui.hidden.includes(runKey(r)));
+
+  app.append(runsCard(runs, selected), componentsCard(selected), scenesCard(suite, selected), glossaryCard());
+}
+
+function runsCard(runs, selected) {
+  const best = bestValues(selected, METRICS, (m) => (r) => r.aggregate[m.key]);
+  const toggle = (r) => (e) => {
+    const k = runKey(r);
+    ui.hidden = e.target.checked ? ui.hidden.filter((h) => h !== k) : [...ui.hidden, k];
+    save(); render();
+  };
+
+  const rows = runs.map((r) => {
+    const on = selected.includes(r);
+    const git = r.git && r.git.commit ? `${r.git.commit}${r.git.dirty ? "*" : ""}` : "";
+    return el("tr", { style: on ? null : "opacity:0.45" },
+      el("td", { class: "left" }, el("div", { class: "run-cell" },
+        el("input", { type: "checkbox", checked: on, onchange: toggle(r), "aria-label": `Compare ${r.run_name}` }),
+        swatch(r),
+        el("div", {},
+          el("div", { class: "name" }, r.run_name),
+          r.notes ? el("div", { class: "notes" }, r.notes) : null))),
+      METRICS.map((m) => {
+        const v = r.aggregate[m.key];
+        return el("td", { class: on && isBest(best, m, v) ? "best" : null }, show(m, v));
+      }),
+      el("td", { class: "left small muted", title: r.checkpoint }, r.checkpoint.split("/").slice(-1)[0]),
+      el("td", { class: "left small muted", title: git ? "git commit (* = uncommitted changes)" : null }, git),
+      el("td", { class: "left small muted", title: r.created }, r.created.slice(5, 16).replace("T", " ")),
+    );
+  });
+
+  // Logged (human) trajectories as a reference for the rates that have a log counterpart
+  const refRun = runs[0];
+  const refRow = el("tr", { class: "ref" },
+    el("td", { class: "left" }, "Logged trajectories"),
+    METRICS.map((m) => el("td", {}, m.ref ? show(m, refRun.aggregate[m.ref]) : "")),
+    el("td", { colspan: 3 }));
+
+  return el("section", { class: "card" },
+    el("div", { class: "card-head" },
+      el("h2", {}, "Runs"),
+      el("span", { class: "small muted" }, "Mean over scenes. ★ = best among checked runs. Uncheck a run to hide it below.")),
+    el("div", { class: "scroll" }, el("table", {},
+      el("thead", {}, el("tr", {},
+        el("th", { class: "left" }, "Run"),
+        METRICS.map((m) => el("th", { title: m.desc }, m.label, " ", el("span", { class: "dir" }, m.better === "high" ? "↑" : "↓"))),
+        el("th", { class: "left" }, "Checkpoint"),
+        el("th", { class: "left" }, "Git"),
+        el("th", { class: "left" }, "Evaluated"))),
+      el("tbody", {}, rows, refRow))));
+}
+
+function componentsCard(selected) {
+  const best = bestValues(selected, COMPONENTS, (m) => (r) => r.aggregate[m.key]);
+  return el("section", { class: "card" }, el("details", {},
+    el("summary", {}, "Component likelihoods"),
+    el("div", { class: "scroll" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", { class: "left" }, "Run"), COMPONENTS.map((m) => el("th", {}, m.label, " ", el("span", { class: "dir" }, "↑"))))),
+      el("tbody", {}, selected.map((r) => el("tr", {},
+        el("td", { class: "left" }, el("div", { class: "run-cell" }, swatch(r), el("span", { class: "name" }, r.run_name))),
+        COMPONENTS.map((m) => {
+          const v = r.aggregate[m.key];
+          return el("td", { class: isBest(best, m, v) ? "best" : null }, show(m, v));
+        }))))))));
+}
+
+// ---------- scenes ----------
+function scenesCard(suite, selected) {
+  const allMetrics = [...METRICS, ...COMPONENTS];
+  const metric = allMetrics.find((m) => m.key === ui.sceneMetric) || METRICS[0];
+  const videoSet = new Set(suite.video_scenes);
+  const pair = selected.length === 2 ? selected : null;
+
+  let scenes = suite.scenes.map((s, i) => {
+    const vals = selected.map((r) => (r.scenes[s.scenario_id] || {})[metric.key]);
+    const delta = pair && isNum(vals[0]) && isNum(vals[1]) ? vals[1] - vals[0] : null;
+    return { id: s.scenario_id, index: i, vals, delta, video: videoSet.has(s.scenario_id) };
+  });
+  if (ui.videoOnly) scenes = scenes.filter((s) => s.video);
+
+  const sort = ui.sort && ui.sort.metric === metric.key ? ui.sort : null;
+  if (sort) {
+    const val = (s) => (sort.col === "delta" ? s.delta : sort.col === "index" ? s.index : s.vals[sort.col]);
+    scenes.sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (!isNum(va)) return 1;
+      if (!isNum(vb)) return -1;
+      return sort.asc ? va - vb : vb - va;
+    });
+  }
+  const setSort = (col) => () => {
+    const asc = sort && sort.col === col ? !sort.asc : col === "index";
+    ui.sort = { metric: metric.key, col, asc }; save(); render();
+  };
+  const arrow = (col) => (sort && sort.col === col ? (sort.asc ? " ▲" : " ▼") : "");
+
+  if (!scenes.some((s) => s.id === ui.scene)) ui.scene = (scenes.find((s) => s.video) || scenes[0] || {}).id || null;
+
+  const best = (s) => bestValues(selected.map((r, i) => ({ v: s.vals[i] })), [metric], () => (x) => x.v);
+  const metricPicker = el("select", { "aria-label": "Scene metric", onchange: (e) => { ui.sceneMetric = e.target.value; save(); render(); } },
+    el("optgroup", { label: "Headline" }, METRICS.map((m) => el("option", { value: m.key, selected: m.key === metric.key }, m.label))),
+    el("optgroup", { label: "Components" }, COMPONENTS.map((m) => el("option", { value: m.key, selected: m.key === metric.key }, m.label))));
+
+  const list = el("div", { class: "scene-list" }, el("table", {},
+    el("thead", {}, el("tr", {},
+      el("th", { class: "left sortable", onclick: setSort("index") }, "#", arrow("index")),
+      el("th", { class: "left" }, "Scenario"),
+      selected.map((r, i) => el("th", { class: "sortable", onclick: setSort(i), title: r.run_name },
+        el("span", { class: "swatch", style: `display:inline-block;margin-right:4px;background:${runColor(r)}` }),
+        r.run_name.length > 14 ? r.run_name.slice(0, 13) + "…" : r.run_name, arrow(i))),
+      pair ? el("th", { class: "sortable", onclick: setSort("delta"), title: `${pair[1].run_name} − ${pair[0].run_name}` }, "Δ", arrow("delta")) : null)),
+    el("tbody", {}, scenes.map((s) => {
+      const b = best(s);
+      const deltaGood = s.delta !== null && metric.better && (metric.better === "high" ? s.delta > 0 : s.delta < 0);
+      const deltaCls = s.delta === null || Math.abs(s.delta) < 1e-12 ? null : deltaGood ? "delta-good" : "delta-bad";
+      const select = () => { ui.scene = s.id; save(); render(); };
+      return el("tr", {
+        class: s.id === ui.scene ? "selected" : null, tabindex: "0", onclick: select,
+        onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); } },
+      },
+        el("td", { class: "left muted" }, s.index + 1),
+        el("td", { class: "left" }, el("span", { class: "scene-id" }, s.id), s.video ? el("span", { class: "has-video", title: "Has video", "aria-label": "has video" }, "▶") : null),
+        s.vals.map((v) => el("td", { class: isBest(b, metric, v) ? "best" : null }, show(metric, v))),
+        pair ? el("td", { class: deltaCls }, s.delta === null ? "—" : (s.delta > 0 ? "+" : s.delta < 0 ? "−" : "") + metric.fmt(Math.abs(s.delta))) : null);
+    }))));
+
+  return el("section", { class: "card" },
+    el("div", { class: "card-head" },
+      el("h2", {}, "Scenes"),
+      el("label", { class: "small muted" }, "Metric ", metricPicker),
+      el("label", { class: "small muted" },
+        el("input", { type: "checkbox", checked: ui.videoOnly, onchange: (e) => { ui.videoOnly = e.target.checked; save(); render(); } }),
+        " only scenes with video"),
+      pair ? el("span", { class: "small muted" }, `Δ = ${pair[1].run_name} − ${pair[0].run_name}; green = better`) : el("span", { class: "small muted" }, "Check exactly two runs to see per-scene differences")),
+    el("div", { class: "scenes-layout" }, list, sceneDetail(suite, selected, videoSet)));
+}
+
+function sceneDetail(suite, selected, videoSet) {
+  const sid = ui.scene;
+  if (!sid) return el("div", { class: "empty" }, "No scene selected");
+  const ids = suite.scenes.map((s) => s.scenario_id);
+  const idx = ids.indexOf(sid);
+  const go = (d) => () => { ui.scene = ids[(idx + d + ids.length) % ids.length]; save(); render(); };
+
+  const hasVideo = videoSet.has(sid);
+  const videos = [];
+  const tiles = selected.map((r) => {
+    const rel = r.videos && r.videos[sid];
+    let body;
+    if (rel) {
+      const v = el("video", { src: `${r.dir}/${rel}`, muted: true, loop: true, playsinline: true, preload: "auto",
+        title: "Double-click for full screen", ondblclick: (e) => e.target.requestFullscreen && e.target.requestFullscreen() });
+      v.muted = true;
+      videos.push(v);
+      body = v;
+    } else {
+      body = el("div", { class: "missing" }, hasVideo ? "No video for this run (rendered with --no-videos?)" : "Scene not in the suite's video set");
+    }
+    return el("div", { class: "video-tile" }, el("div", { class: "label" }, swatch(r), r.run_name), body);
+  });
+
+  // One set of controls drives all videos so the runs stay frame-aligned
+  const slider = el("input", { type: "range", min: 0, max: 1000, value: 0, "aria-label": "Seek" });
+  const time = el("span", { class: "time" }, "0.0 s");
+  const playBtn = el("button", {}, "Play");
+  const applySpeed = () => videos.forEach((v) => (v.playbackRate = ui.speed));
+  const lead = () => videos[0];
+  const playing = () => lead() && !lead().paused;
+  playBtn.onclick = () => {
+    if (playing()) videos.forEach((v) => v.pause());
+    else { const t = lead().currentTime; videos.forEach((v) => { v.currentTime = t; applySpeed(); v.play(); }); }
+  };
+  const restart = el("button", { onclick: () => videos.forEach((v) => (v.currentTime = 0)) }, "Restart");
+  slider.oninput = () => {
+    if (!lead() || !lead().duration) return;
+    const t = (slider.value / 1000) * lead().duration;
+    videos.forEach((v) => (v.currentTime = Math.min(t, v.duration || t)));
+  };
+  const speed = el("select", { "aria-label": "Playback speed", onchange: (e) => { ui.speed = +e.target.value; save(); applySpeed(); } },
+    SPEEDS.map(([label, rate]) => el("option", { value: rate, selected: Math.abs(rate - ui.speed) < 1e-9 }, label)));
+  if (videos.length) {
+    const v0 = videos[0];
+    v0.addEventListener("timeupdate", () => {
+      if (v0.duration) slider.value = Math.round((v0.currentTime / v0.duration) * 1000);
+      // Sim time: 3 video seconds at 30 fps per 10 Hz sim second
+      time.textContent = `${(v0.currentTime * 3).toFixed(1)} s`;
+    });
+    v0.addEventListener("play", () => (playBtn.textContent = "Pause"));
+    v0.addEventListener("pause", () => (playBtn.textContent = "Play"));
+    // Re-align followers when the lead loops
+    v0.addEventListener("seeked", () => videos.slice(1).forEach((v) => { if (Math.abs(v.currentTime - v0.currentTime) > 0.1) v.currentTime = v0.currentTime; }));
+    videos.forEach((v) => v.addEventListener("loadedmetadata", applySpeed));
+  }
+
+  const metrics = [...METRICS, ...DETAIL_EXTRA, ...COMPONENTS];
+  const vals = (m) => selected.map((r) => (r.scenes[sid] || {})[m.key]);
+  const table = el("div", { class: "scroll" }, el("table", {},
+    el("thead", {}, el("tr", {}, el("th", { class: "left" }, "Metric"),
+      selected.map((r) => el("th", {}, el("span", { class: "swatch", style: `display:inline-block;margin-right:4px;background:${runColor(r)}` }), r.run_name)),
+      el("th", { class: "muted" }, "Logged"))),
+    el("tbody", {}, metrics.map((m) => {
+      const vs = vals(m);
+      const b = bestValues(vs.map((v) => ({ v })), [m], () => (x) => x.v);
+      const ref = m.ref && selected[0] ? (selected[0].scenes[sid] || {})[m.ref] : undefined;
+      return el("tr", {},
+        el("td", { class: "left", title: m.desc || null }, m.label, m.better ? el("span", { class: "dir muted" }, m.better === "high" ? " ↑" : " ↓") : null),
+        vs.map((v) => el("td", { class: isBest(b, m, v) ? "best" : null }, show(m, v))),
+        el("td", { class: "muted" }, ref === undefined ? "" : show(m, ref)));
+    }))));
+
+  return el("div", {},
+    el("div", { class: "detail-head" },
+      el("button", { onclick: go(-1), "aria-label": "Previous scene" }, "←"),
+      el("button", { onclick: go(1), "aria-label": "Next scene" }, "→"),
+      el("span", { class: "scene-id" }, sid),
+      el("span", { class: "small muted" }, `scene ${idx + 1} of ${ids.length} · map_id ${suite.scenes[idx].map_id}`)),
+    selected.length ? el("div", { class: "videos" }, tiles) : null,
+    videos.length ? el("div", { class: "controls" }, playBtn, restart, slider, time, speed) : null,
+    videos.length ? el("p", { class: "legend-note" },
+      "One sampled rollout per run, same seed. Light dots: the logged (human) trajectories of the controlled agents. Double-click a video for full screen.") : null,
+    table);
+}
+
+function glossaryCard() {
+  return el("section", { class: "card" }, el("details", {},
+    el("summary", {}, "What the metrics mean"),
+    el("dl", { class: "glossary" },
+      [...METRICS, ...DETAIL_EXTRA].filter((m) => m.desc).map((m) => [el("dt", {}, m.label), el("dd", {}, m.desc)]),
+      el("dt", {}, "Logged"), el("dd", {}, "The same rate measured on the logged (human) trajectories, for reference."),
+      el("dt", {}, "Scenes"), el("dd", {}, "Every run on a suite is evaluated on the same scenes with the same protocol and seed, so rows are directly comparable."))));
+}
+
+render();
+</script>
+</body>
+</html>

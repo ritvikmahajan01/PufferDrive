@@ -45,6 +45,19 @@ Add `--load-model-path <path_to_checkpoint>.pt` to score a trained policy, inste
 
 See [the WOSAC benchmark page](wosac.md) for the metric pipeline and all the details.
 
+### Comparing runs on fixed scenes 🎞️
+
+`puffer eval` samples scenes at random, so two runs are scored on different scenes. To compare runs, use the eval report instead. It scores each checkpoint on the same fixed scenes, renders videos of a fixed subset, and rebuilds a static dashboard of every run:
+
+```bash
+python -m pufferlib.ocean.benchmark.eval_report --run-name self_play --notes "baseline" \
+    --load-model-path experiments/<run>.pt
+```
+
+Open `eval_reports/index.html` in a browser. It shows the mean metrics per run, a per-scene table (with the difference when two runs are checked), and synced side-by-side videos.
+
+The first run creates the suite `eval_reports/suites/default.json`, which records the scenes (map index and scenario id) and the protocol (init steps, control mode, rollouts, seed). Later runs reuse it, so their numbers are directly comparable. Options: `--suite <name>` for a separate suite, `--num-scenes` / `--num-videos` / `--seed` (used only when a suite is created), `--no-videos`, and `--rebuild-only` (regenerate the dashboard only). Pass the same `--env.*` / `--policy.*` overrides you trained with.
+
 ## Human-compatibility benchmark 🤝
 
 You may be interested in how compatible your agent is with human partners. For this purpose, we support an eval where your policy only controls the self-driving car (SDC). The rest of the agents in the scene are stepped using the logs. While it is not a perfect eval since the human partners here are static, it will still give you a sense of how closely aligned your agent's behavior is to how people drive. You can run it like this:
