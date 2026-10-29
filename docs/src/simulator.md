@@ -170,6 +170,7 @@ mid_x, mid_y, length, width, dir_cos, dir_sin, type
 - Off-road: -1.0
 - Goal reached: +1.0 (or +0.25 after respawn in mode 0)
 - Jerk penalty (classic only): -0.0002 × Δv/dt
+- Human-likeness (opt-in, off by default): `reward_ade × (1 − min(d, ade_clip) / ade_clip)`, where `d` is the distance to the agent's logged position at the same timestep. Only applied while the log is valid and before the agent's first respawn. The `avg_displacement_error` metric is always logged.
 
 > [!TIP]
 > Goal completion requires both distance < `goal_radius` (default 2m) AND speed ≤ `goal_speed`.

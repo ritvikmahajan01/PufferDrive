@@ -190,6 +190,9 @@ struct Log {
     float static_agent_count;
     float perc_controlled;
     float perc_other;
+    // Displacement from the human log: sum of per-agent ADEs and number of agents with at least one valid step
+    float ade_sum;
+    float ade_agent_count;
 };
 
 typedef struct Entity Entity;
@@ -234,6 +237,9 @@ struct Entity {
     float goals_reached_this_episode;
     float goals_sampled_this_episode;
     int current_goal_reached;
+    // Displacement from the logged trajectory, accumulated over the steps where it is defined
+    float displacement_sum;
+    int displacement_steps;
     int active_agent;
     int stopped;
     int removed;
@@ -342,6 +348,8 @@ struct Drive {
     float dt;
     float reward_goal;
     float reward_goal_post_respawn;
+    float reward_ade; // Max per-step reward for matching the human log (0 disables)
+    float ade_clip;   // Displacement (m) at which the ADE reward reaches zero
     float goal_radius;
     float goal_speed;
     int logs_capacity;
@@ -396,6 +404,10 @@ void add_log(Drive *env) {
         int lane_aligned = env->logs[i].lane_alignment_rate;
         env->log.lane_alignment_rate += lane_aligned;
         env->log.speed_at_goal += env->logs[i].speed_at_goal;
+        if (e->displacement_steps > 0) {
+            env->log.ade_sum += e->displacement_sum / e->displacement_steps;
+            env->log.ade_agent_count += 1.0f;
+        }
         env->log.episode_length += env->logs[i].episode_length;
         env->log.episode_return += env->logs[i].episode_return;
         // Log composition counts per agent so vec_log averaging recovers the per-env value
@@ -536,6 +548,8 @@ void set_start_position(Drive *env) {
         e->stopped = 0;
         e->removed = 0;
         e->respawn_count = 0;
+        e->displacement_sum = 0.0f;
+        e->displacement_steps = 0;
 
         // Dynamics
         e->a_long = 0.0f;
@@ -2082,6 +2096,18 @@ void respawn_agent(Drive *env, int agent_idx) {
     env->entities[agent_idx].steering_angle = 0.0f;
 }
 
+// Distance (m) between the agent and its logged position at the current timestep.
+// Returns -1 when there is no time-aligned reference: the log is invalid or out of range,
+// or the agent has respawned (it restarts from traj[0] while the timestep keeps running).
+float displacement_from_log(Drive *env, Entity *agent) {
+    int t = env->timestep;
+    if (agent->respawn_timestep != -1 || agent->removed)
+        return -1.0f;
+    if (t < 0 || t >= agent->array_size || !agent->traj_valid[t])
+        return -1.0f;
+    return relative_distance_2d(agent->x, agent->y, agent->traj_x[t], agent->traj_y[t]);
+}
+
 void c_step(Drive *env) {
     memset(env->rewards, 0, env->active_agent_count * sizeof(float));
     memset(env->terminals, 0, env->active_agent_count * sizeof(unsigned char));
@@ -2171,6 +2197,22 @@ void c_step(Drive *env) {
             }
             env->entities[agent_idx].metrics_array[REACHED_GOAL_IDX] = 1.0f;
             env->logs[i].speed_at_goal = current_speed;
+        }
+
+        // Displacement from the human log (always measured for the ADE metric).
+        // The reward is a clipped ADE shifted to be non-negative: reward_ade at 0 m, falling linearly
+        // to 0 at ade_clip. The shift matters because the number of measured steps depends on the
+        // policy (measurement stops at respawn); a pure penalty would reward rushing to the goal.
+        // Added after the goal block, which assigns (not adds) the goal reward.
+        float displacement = displacement_from_log(env, &env->entities[agent_idx]);
+        if (displacement >= 0.0f) {
+            env->entities[agent_idx].displacement_sum += displacement;
+            env->entities[agent_idx].displacement_steps += 1;
+            if (env->reward_ade != 0.0f) {
+                float ade_reward = env->reward_ade * (1.0f - fminf(displacement, env->ade_clip) / env->ade_clip);
+                env->rewards[i] += ade_reward;
+                env->logs[i].episode_return += ade_reward;
+            }
         }
 
         int lane_aligned = env->entities[agent_idx].metrics_array[LANE_ALIGNED_IDX];

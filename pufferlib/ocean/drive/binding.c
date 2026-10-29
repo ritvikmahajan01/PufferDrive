@@ -246,6 +246,8 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
     OVERRIDE_FLOAT(reward_offroad_collision);
     OVERRIDE_FLOAT(reward_goal);
     OVERRIDE_FLOAT(reward_goal_post_respawn);
+    OVERRIDE_FLOAT(reward_ade);
+    OVERRIDE_FLOAT(ade_clip);
     OVERRIDE_INT(collision_behavior);
     OVERRIDE_INT(offroad_behavior);
     OVERRIDE_FLOAT(dt);
@@ -267,6 +269,12 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
     env->reward_offroad_collision = conf.reward_offroad_collision;
     env->reward_goal = conf.reward_goal;
     env->reward_goal_post_respawn = conf.reward_goal_post_respawn;
+    env->reward_ade = conf.reward_ade;
+    env->ade_clip = conf.ade_clip;
+    if (env->reward_ade != 0.0f && env->ade_clip <= 0.0f) {
+        PyErr_SetString(PyExc_ValueError, "ade_clip must be > 0 when reward_ade is enabled");
+        return -1;
+    }
     env->episode_length = conf.episode_length;
     env->termination_mode = conf.termination_mode;
     env->collision_behavior = conf.collision_behavior;
@@ -311,6 +319,9 @@ static int my_log(PyObject *dict, Log *log) {
     assign_to_dict(dict, "goals_sampled_this_episode", log->goals_sampled_this_episode);
     assign_to_dict(dict, "goals_reached_this_episode", log->goals_reached_this_episode);
     assign_to_dict(dict, "speed_at_goal", log->speed_at_goal);
-    // assign_to_dict(dict, "avg_displacement_error", log->avg_displacement_error);
+    // Ratio of sums, so agents without a valid log step are excluded (vec_log's division by n cancels)
+    if (log->ade_agent_count > 0) {
+        assign_to_dict(dict, "avg_displacement_error", log->ade_sum / log->ade_agent_count);
+    }
     return 0;
 }
